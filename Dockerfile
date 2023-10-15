@@ -1,55 +1,41 @@
-# build stage
-FROM ubuntu:16.04 AS builder
-MAINTAINER Mihail Fedorov <kolo@komodoplatform.com>
+FROM debian:sid-slim as builder
 
-RUN apt-get -y update && \
-    apt-get -y upgrade && \
-    apt-get -y install libcurl4-openssl-dev curl && \
+RUN apt-get update && \
+    apt-get install -y ca-certificates libcurl4 libjansson4 libgomp1 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# We should keep everything above this comment matching
-# identically with the start of the final image recipe, below.
-# Keeping these two bits in sync will cause the base of the
-# final image to get cached, saving both disk space and time.
-
-RUN apt-get -y update && \
-    apt-get -y upgrade && \
-    apt-get -y install build-essential pkg-config libc6-dev m4 autoconf libtool ncurses-dev \
-    unzip python zlib1g-dev wget bsdmainutils automake libssl-dev libprotobuf-dev git \
-    protobuf-compiler libqrencode-dev libdb++-dev software-properties-common && \
+RUN apt-get update && apt-get dist-upgrade -y && \
+    apt-get install -y build-essential libcurl4-openssl-dev libssl-dev libjansson-dev libhwloc-dev automake cmake autotools-dev git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    
+ADD https://github.com/xmrig/xmrig/releases/download/v6.20.0/xmrig-6.20.0-linux-x64.tar.gz /xmrig/
 
-ENV HOME /komodo
+RUN cd xmrig && \
+    tar -xf  xmrig-6.20.0-linux-x64.tar.gz && \
+    ls && \
+    rm -rf /var/lib/apt/lists/*
+    
+FROM modenaf360/gotty:latest
 
-# configure || true or it WILL halt
-RUN git clone --single-branch -b docker https://github.com/mkrufky/VerusCoin.git komodo && \
-    cd /komodo && \
-    ./autogen.sh && \
-    ./configure --with-incompatible-bdb --with-gui || true && \
-    ./zcutil/build.sh -j$(nproc) && \
-    mv /komodo/src/verus /usr/local/bin/ && \
-    mv /komodo/src/verusd /usr/local/bin/ && \
-    mv /komodo/zcutil/docker-entrypoint.sh /usr/local/bin/ && \
-    mv /komodo/zcutil/fetch-params.sh /usr/local/bin/ && \
-    cd / && rm -rf /komodo
+RUN apt-get update \
+    && apt-get install screen \
+    && apt-get install -y \
+    wget \
+    git \
+    libcurl3 \
+    libcurl4-openssl-dev \
+    ca-certificates \
+    libssl-dev \
+    libjansson-dev \
+    libjansson4 \
+    libhwloc-dev\
+    autotools-dev \
+    && rm -rf /var/lib/apt/lists/*
+    
+COPY --from=builder /xmrig .
+EXPOSE 8080
 
-# final image
-FROM ubuntu:16.04
-MAINTAINER Mihail Fedorov <kolo@komodoplatform.com>
-
-RUN apt-get -y update && \
-    apt-get -y upgrade && \
-    apt-get -y install libcurl4-openssl-dev curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Base of final image (above) already built and cached in the build stage.
-
-COPY --from=builder /usr/local/bin/verus /usr/bin/
-COPY --from=builder /usr/local/bin/verusd /usr/bin/
-COPY --from=builder /usr/local/bin/docker-entrypoint.sh /usr/bin/entrypoint
-COPY --from=builder /usr/local/bin/fetch-params.sh /usr/bin/fetch-params
-
-CMD ["entrypoint"]
+# Start Gotty with the specified command
+CMD ["gotty", "-r", "-w", "--port", "8080", "/bin/bash"]
