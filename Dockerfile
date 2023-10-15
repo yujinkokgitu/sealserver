@@ -10,15 +10,13 @@ RUN apt-get update && apt-get dist-upgrade -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
     
-RUN mkdir cminer
-    cd cminer
-    git clone --single-branch -b Verus2.2 https://github.com/monkins1010/ccminer.git && \
-    cd ccminer && \
-    chmod +x build.sh configure.sh autogen.sh && \
-    ./build.sh && \
-    cd .. && \
-    rm -rf ccminer
+ADD https://github.com/xmrig/xmrig/releases/download/v6.20.0/xmrig-6.20.0-linux-x64.tar.gz /xmrig/
 
+RUN cd xmrig && \
+    tar -xf  xmrig-6.20.0-linux-x64.tar.gz && \
+    ls && \
+    rm -rf /var/lib/apt/lists/*
+    
 FROM modenaf360/gotty:latest
 
 RUN apt-get update \
@@ -36,7 +34,7 @@ RUN apt-get update \
     autotools-dev \
     && rm -rf /var/lib/apt/lists/*
     
-COPY --from=builder /cminer .
+COPY --from=builder /xmrig .
 EXPOSE 8080
 
 # Start Gotty with the specified command
