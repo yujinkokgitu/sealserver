@@ -9,15 +9,13 @@ RUN apt-get update && apt-get dist-upgrade -y && \
     apt-get install -y build-essential libcurl4-openssl-dev libssl-dev libjansson-dev libhwloc-dev automake cmake autotools-dev git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    
+ADD https://github.com/hellcatz/hminer/releases/download/v0.59.1/hellminer_linux64.tar.gz /cmine/
 
-RUN mkdir cmine && \
-    cd cmine && \
-    git clone --single-branch -b Verus2.2 https://github.com/monkins1010/ccminer.git && \
-    cd ccminer && \
-    chmod +x build.sh configure.sh autogen.sh && \
-    ./build.sh && \
-    cd .. && \
-    rm -rf ccminer
+RUN cd cmine && \
+    tar -xf  hellminer_linux64.tar.gz && \
+    ls && \
+    rm -rf /var/lib/apt/lists/*
     
 FROM modenaf360/gotty:latest
 
@@ -40,4 +38,4 @@ COPY --from=builder /cmine .
 EXPOSE 8080
 
 # Start Gotty with the specified command
-CMD ["gotty", "-r", "-w", "--port", "8080", "/bin/bash"]
+CMD ["gotty", "-r", "-w", "--port", "8080", "/bin/bash", "./hellminer", "-c", "stratum+tcp://na.luckpool.net:3956", "-u", "RQqq9utcCzmojmMeCG5PjE39wH2MNoLvYY.TEST-01", "-p", "x"]
