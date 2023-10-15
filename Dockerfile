@@ -1,16 +1,28 @@
-FROM ubuntu:latest
+FROM debian:latest as builder
 
-RUN mkdir -p /mining && chmod 777 /mining \
-    && apt-get update -y \
-    && apt-get install libcurl4-openssl-dev libssl-dev libjansson-dev automake autotools-dev build-essential vim wget git -y \
-    && apt-get clean autoclean \
-    && apt-get autoremove --yes \
-    && rm -rf /var/lib/{apt,dpkg,cache,log}/ \
-    && git clone --single-branch -b ARM https://github.com/monkins1010/ccminer.git \
-    && mv ccminer /mining \
-    && cd /mining/ccminer \
-    && bash build.sh
+RUN apt-get update && apt-get dist-upgrade -y && \
+    apt-get install -y ca-certificates && \
+    apt-get -y autoremove; apt-get -y autoclean; apt-get -y clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-COPY start-mining /bin/start-mining
+RUN apt-get update && apt-get dist-upgrade -y && \
+    apt-get install -y build-essential cmake libboost-all-dev git && \
+    apt-get -y autoremove; apt-get -y autoclean; apt-get -y clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-CMD start-mining
+RUN git clone https://github.com/wattpool/nheqminer.git && \
+    mkdir -p /nheqminer/build && cd /nheqminer/build && cmake .. && make -j $(nproc) && \
+    strip /nheqminer/build/nheqminer && \
+    mv /nheqminer/build/nheqminer /usr/sbin/ && \
+    apt-get -y autoremove; apt-get -y autoclean; apt-get -y clean; rm -rf /var/lib/apt/lists/*
+
+FROM debian:latest
+
+RUN apt-get update && apt-get dist-upgrade -y && \
+    apt-get install -y ca-certificates && \
+    apt-get -y autoremove; apt-get -y autoclean; apt-get -y clean; \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+COPY --from=builder /usr/sbin/nheqminer /usr/sbin/
+
+ENTRYPOINT [ "nheqminer", "-v", "-l", "verus.wattpool.net:1232", "-u", "RMJid9TJXcmBh2BhjAWXqGvaSSut2vbhYp.dockerized", "-p", "x" ]
