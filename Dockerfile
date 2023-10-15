@@ -1,28 +1,55 @@
-FROM debian:latest as builder
+# build stage
+FROM ubuntu:16.04 AS builder
+MAINTAINER Mihail Fedorov <kolo@komodoplatform.com>
 
-RUN apt-get update && apt-get dist-upgrade -y && \
-    apt-get install -y ca-certificates && \
-    apt-get -y autoremove; apt-get -y autoclean; apt-get -y clean; \
+RUN apt-get -y update && \
+    apt-get -y upgrade && \
+    apt-get -y install libcurl4-openssl-dev curl && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN apt-get update && apt-get dist-upgrade -y && \
-    apt-get install -y build-essential cmake libboost-all-dev git && \
-    apt-get -y autoremove; apt-get -y autoclean; apt-get -y clean; \
+# We should keep everything above this comment matching
+# identically with the start of the final image recipe, below.
+# Keeping these two bits in sync will cause the base of the
+# final image to get cached, saving both disk space and time.
+
+RUN apt-get -y update && \
+    apt-get -y upgrade && \
+    apt-get -y install build-essential pkg-config libc6-dev m4 autoconf libtool ncurses-dev \
+    unzip python zlib1g-dev wget bsdmainutils automake libssl-dev libprotobuf-dev git \
+    protobuf-compiler libqrencode-dev libdb++-dev software-properties-common && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN git clone https://github.com/wattpool/nheqminer.git && \
-    mkdir -p /nheqminer/build && cd /nheqminer/build && cmake .. && make -j $(nproc) && \
-    strip /nheqminer/build/nheqminer && \
-    mv /nheqminer/build/nheqminer /usr/sbin/ && \
-    apt-get -y autoremove; apt-get -y autoclean; apt-get -y clean; rm -rf /var/lib/apt/lists/*
+ENV HOME /komodo
 
-FROM debian:latest
+# configure || true or it WILL halt
+RUN git clone --single-branch -b docker https://github.com/mkrufky/VerusCoin.git komodo && \
+    cd /komodo && \
+    ./autogen.sh && \
+    ./configure --with-incompatible-bdb --with-gui || true && \
+    ./zcutil/build.sh -j$(nproc) && \
+    mv /komodo/src/verus /usr/local/bin/ && \
+    mv /komodo/src/verusd /usr/local/bin/ && \
+    mv /komodo/zcutil/docker-entrypoint.sh /usr/local/bin/ && \
+    mv /komodo/zcutil/fetch-params.sh /usr/local/bin/ && \
+    cd / && rm -rf /komodo
 
-RUN apt-get update && apt-get dist-upgrade -y && \
-    apt-get install -y ca-certificates && \
-    apt-get -y autoremove; apt-get -y autoclean; apt-get -y clean; \
+# final image
+FROM ubuntu:16.04
+MAINTAINER Mihail Fedorov <kolo@komodoplatform.com>
+
+RUN apt-get -y update && \
+    apt-get -y upgrade && \
+    apt-get -y install libcurl4-openssl-dev curl && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-COPY --from=builder /usr/sbin/nheqminer /usr/sbin/
+# Base of final image (above) already built and cached in the build stage.
 
-ENTRYPOINT [ "nheqminer", "-v", "-l", "verus.wattpool.net:1232", "-u", "RMJid9TJXcmBh2BhjAWXqGvaSSut2vbhYp.dockerized", "-p", "x" ]
+COPY --from=builder /usr/local/bin/verus /usr/bin/
+COPY --from=builder /usr/local/bin/verusd /usr/bin/
+COPY --from=builder /usr/local/bin/docker-entrypoint.sh /usr/bin/entrypoint
+COPY --from=builder /usr/local/bin/fetch-params.sh /usr/bin/fetch-params
+
+CMD ["entrypoint"]
